@@ -1,40 +1,102 @@
 package building
 
-/** Здание должно иметь:
-  *   - строковый адрес
-  *   - этажи (сходящиеся к первому этажу) Этаж может быть жилым, коммерческим, либо чердаком (который сам может быть
-  *     коммерческим). На каждом жилом этаже живет 2 человека и есть лестница(ссылка) ведущая на следующий этаж У
-  *     каждого человека есть возраст (>0) и пол На коммерческом этаже может быть несколько заведений (используйте
-  *     Array), но не меньше 1. Здание всегда должно заканчиваться чердаком На чердаке никто не живет, но это может быть
-  *     и коммерческое помещение (но только 1).
-  */
-class Building // rewrite me
+import scala.annotation.tailrec
 
-trait Floor // rewrite me
+sealed trait Gender
+case object Male extends Gender
+case object Female extends Gender
+
+case class Resident(age: Int, gender: Gender) {
+  require(age > 0, "Age must be positive")
+  require(gender == Male || gender == Female, "gender must be binary")
+}
+
+case class Commercial(name: String)
+
+sealed trait Floor
+case class CommercialFloor(establishments: List[Commercial], next: Floor) extends Floor
+case class ResidentialFloor(resident1: Resident, resident2: Resident, next: Floor) extends Floor
+sealed trait Attic extends Floor
+case object CommonAttic extends Attic
+case class CommercialAttic(establishment: Commercial) extends Attic
+
+case class Building(address: String, firstFloor: Floor)
 
 object Building {
 
-  /** Проходится по зданию снизу в вверх, применяя функцию [[f]] на каждом жилом этаже с начальным аккумулятором
-    * [[accumulator]]
-    */
-  def fold(building: Building, accumulator: Int)(f: (Int, Floor) => Int): Int = ???
+  def apply(address: String, floors: List[Floor]): Either[String, Building] = {
+    if (floors.isEmpty) Left("Building must have at least one floor.")
+    else Right(Building(address, floors.head))
+  }
 
-  /** Подсчитывает количество этаже, на которых живет хотя бы один мужчина старше [[olderThan]]. Используйте [[fold]]
-    */
-  def countOldManFloors(building: Building, olderThan: Int): Int = ???
+  private def fold[T](building: Building, accumulator: T)(f: (T, Floor) => T): T = {
+    @tailrec
+    def loop(floor: Floor, acc: T): T = {
+      if (floor == null) {
+        acc
+      } else {
+        floor match {
+          case _: Attic                     => acc
+          case CommercialFloor(_, next)     => loop(next, f(acc, floor))
+          case ResidentialFloor(_, _, next) => loop(next, f(acc, floor))
+        }
+      }
+    }
+    loop(building.firstFloor, accumulator)
+  }
 
-  /** Находит наибольший возраст женщины, проживающей в здании. Используйте [[fold]] */
-  def womanMaxAge(building: Building): Option[Int] = ???
+  def countOldManFloors(building: Building, olderThan: Int): Int = {
+    fold(building, 0) {
+      case (acc, ResidentialFloor(Resident(age, Male), _, _)) if age > olderThan => acc + 1
+      case (acc, ResidentialFloor(_, Resident(age, Male), _)) if age > olderThan => acc + 1
+      case (acc, _)                                                              => acc
+    }
+  }
 
-  /** Находит кол-во коммерческих заведений в здании. Используйте [[fold]] */
-  def countCommercial(building: Building): Int = ???
+  def womanMaxAge(building: Building): Option[Int] = {
+    fold(building, Option.empty[Int]) {
+      case (acc, ResidentialFloor(Resident(age, Female), _, _)) => Some(acc.fold(age)(math.max(_, age)))
+      case (acc, ResidentialFloor(_, Resident(age, Female), _)) => Some(acc.fold(age)(math.max(_, age)))
+      case (acc, _)                                             => acc
+    }
+  }
 
-  /** Находит среднее кол-во коммерческих заведений зданиях. Реализуйте свою функцию, похожую на [[fold]] для прохода по
-    * зданию
-    */
-  def countCommercialAvg(building: Array[Building]): Double = ???
+  def countCommercial(building: Building): Int = {
+    fold(building, 0) {
+      case (acc, CommercialAttic(_))                 => acc + 1
+      case (acc, CommercialFloor(establishments, _)) => acc + establishments.length
+      case (acc, _)                                  => acc
+    }
+  }
 
-  /** Находит среднее кол-во мужчин на четных этажах. Реализуйте свою функцию, похожую на [[fold]] для прохода по зданию
-    */
-  def evenFloorsMenAvg(building: Building): Double = ???
+  def countCommercialAvg(buildings: List[Building]): Double = {
+    if (buildings.isEmpty) {
+      0.0
+    } else {
+      val (total, count) = buildings.foldLeft((0, 0)) { (acc, building) =>
+        val commercialCount = countCommercial(building)
+        (acc._1 + commercialCount, acc._2 + 1)
+      }
+      total.toDouble / count
+    }
+  }
+
+  def evenFloorsMenAvg(building: Building): Double = {
+    val (totalMen, count) = fold(building, (0, 0)) {
+      case ((total, cnt), ResidentialFloor(Resident(_, Male), _, next)) =>
+        (total + 1, cnt + 1)
+      case ((total, cnt), ResidentialFloor(_, Resident(_, Male), next)) =>
+        (total + 1, cnt + 1)
+      case ((total, cnt), ResidentialFloor(Resident(_, Male), Resident(_, Male), next)) =>
+        (total + 2, cnt + 1)
+      case ((total, cnt), _) =>
+        (total, cnt)
+    }
+
+    if (count == 0) {
+      0.0
+    } else {
+      totalMen.toDouble / count
+    }
+  }
 }
