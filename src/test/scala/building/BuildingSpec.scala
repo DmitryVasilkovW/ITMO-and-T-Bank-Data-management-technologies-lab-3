@@ -69,7 +69,8 @@ class BuildingSpec extends AnyFlatSpec with Matchers {
   }
 
   "evenFloorsMenAvg" should "return the average count of men on even floors" in {
-    val buildingWithMultipleFloors = Building("Even Towers", ResidentialFloor(maleResident, femaleResident, commercialFloorA))
+    val buildingWithMultipleFloors =
+      Building("Even Towers", ResidentialFloor(maleResident, femaleResident, commercialFloorA))
     evenFloorsMenAvg(buildingWithMultipleFloors) shouldEqual 1.0
   }
 
